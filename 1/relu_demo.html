@@ -1,0 +1,840 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>隐藏层 + ReLU 为什么能拟合更复杂分类</title>
+    <style>
+        :root {
+            --bg: #0a1020;
+            --panel: #121933;
+            --panel2: #0c1328;
+            --text: #eaf0ff;
+            --muted: #aab6df;
+            --grid: #243058;
+            --accent: #7cc7ff;
+            --accent2: #9bffb0;
+            --danger: #ff9c9c;
+            --yellow: #ffd56b;
+            --purple: #c7a6ff;
+        }
+
+        * {
+            box-sizing: border-box
+        }
+
+        body {
+            margin: 0;
+            font-family: Inter, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+            color: var(--text);
+            background: linear-gradient(180deg, #09101d, #0a1221 45%, #09111f);
+        }
+
+        .wrap {
+            max-width: 1450px;
+            margin: 0 auto;
+            padding: 22px
+        }
+
+        h1 {
+            margin: 0 0 10px;
+            font-size: 32px
+        }
+
+        .sub {
+            color: var(--muted);
+            line-height: 1.7;
+            margin-bottom: 18px
+        }
+
+        .panel {
+            background: linear-gradient(180deg, rgba(18, 25, 51, .97), rgba(12, 19, 40, .97));
+            border: 1px solid rgba(124, 199, 255, .12);
+            border-radius: 18px;
+            padding: 16px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, .24);
+            margin-bottom: 16px;
+        }
+
+        .panel h2 {
+            margin: 0 0 6px;
+            font-size: 21px
+        }
+
+        .desc {
+            color: var(--muted);
+            font-size: 14px;
+            line-height: 1.65;
+            margin-bottom: 12px
+        }
+
+        .grid2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px
+        }
+
+        .grid3 {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 16px
+        }
+
+        .canvasBox {
+            background: #0a1127;
+            border: 1px solid rgba(255, 255, 255, .06);
+            border-radius: 16px;
+            overflow: hidden;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: auto
+        }
+
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(220px, 1fr));
+            gap: 10px 16px;
+            margin-top: 12px
+        }
+
+        .control {
+            background: rgba(255, 255, 255, .03);
+            border: 1px solid rgba(255, 255, 255, .05);
+            border-radius: 12px;
+            padding: 10px 12px;
+        }
+
+        label {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            color: var(--muted);
+            font-size: 13px;
+            margin-bottom: 8px
+        }
+
+        input[type="range"] {
+            width: 100%
+        }
+
+        input[type="checkbox"] {
+            transform: scale(1.1)
+        }
+
+        .btnRow {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 10px
+        }
+
+        button {
+            appearance: none;
+            border: none;
+            cursor: pointer;
+            background: linear-gradient(180deg, #55bbff, #3f8cff);
+            color: white;
+            padding: 10px 14px;
+            border-radius: 12px;
+            font-weight: 700;
+            box-shadow: 0 8px 18px rgba(65, 140, 255, .25);
+        }
+
+        .pill {
+            display: inline-block;
+            padding: 6px 10px;
+            border-radius: 999px;
+            font-size: 12px;
+            margin-right: 8px;
+            margin-bottom: 8px;
+            background: rgba(124, 199, 255, .10);
+            border: 1px solid rgba(124, 199, 255, .16);
+            color: #d7ecff
+        }
+
+        .formula {
+            display: inline-block;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+            background: #091022;
+            border: 1px solid rgba(255, 255, 255, .06);
+            padding: 8px 10px;
+            border-radius: 12px
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            margin-top: 12px
+        }
+
+        .stat {
+            background: #0a1127;
+            border: 1px solid rgba(255, 255, 255, .05);
+            border-radius: 14px;
+            padding: 12px
+        }
+
+        .k {
+            font-size: 12px;
+            color: var(--muted);
+            margin-bottom: 5px
+        }
+
+        .v {
+            font-size: 24px;
+            font-weight: 800
+        }
+
+        .note {
+            font-size: 13px;
+            color: var(--muted);
+            line-height: 1.65
+        }
+
+        .small {
+            font-size: 12px;
+            color: var(--muted);
+            margin-top: 8px
+        }
+
+        @media (max-width:1200px) {
+
+            .grid2,
+            .grid3 {
+                grid-template-columns: 1fr
+            }
+
+            .controls {
+                grid-template-columns: 1fr
+            }
+
+            .stats {
+                grid-template-columns: repeat(2, 1fr)
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <h1>为什么“隐藏层 + ReLU”能拟合复杂分类，而单层分类器不行</h1>
+        <div class="sub">
+            以分类问题为例：<b>单层分类器</b>本质上只是在原空间里画出一条直线/超平面，
+            形式类似 <span class="formula">y = sign(w·x + b)</span>。它只能把空间一刀切开，所以只能处理<b>线性可分</b>的情况。<br>
+            加上<b>隐藏层 + ReLU</b>后，每个隐藏神经元会先做一次 <span class="formula">h_i = ReLU(w_i·x + b_i)</span>，
+            这相当于先用很多超平面把空间切成很多块，再把负半空间压到 0。最后输出层对这些隐藏特征再做线性组合。
+            结果就是：整体虽然每一小块里仍是线性的，但拼起来可以形成<b>复杂分段边界</b>。
+        </div>
+
+        <div class="panel">
+            <h2>1) 先看分类边界：单层分类器 vs 隐藏层 + ReLU</h2>
+            <div class="desc">
+                左图是单层线性分类器，它只能给出一条直线边界。右图是一个 2 维输入、若干个 ReLU 隐藏单元的网络，
+                它能组合出折线状、分段线性的复杂边界。切换不同数据集可以直观看到为什么有些问题单层做不到，而隐藏层可以。
+            </div>
+            <div class="grid2">
+                <div>
+                    <div class="canvasBox"><canvas id="linearCanvas" width="660" height="500"></canvas></div>
+                    <div class="small">左：单层分类器，只能在原空间中用一个超平面切分。</div>
+                </div>
+                <div>
+                    <div class="canvasBox"><canvas id="reluNetCanvas" width="660" height="500"></canvas></div>
+                    <div class="small">右：隐藏层 + ReLU，先分段，再组合，因此能形成复杂边界。</div>
+                </div>
+            </div>
+
+            <div class="controls">
+                <div class="control">
+                    <label><span>数据集</span><b id="datasetName">XOR</b></label>
+                    <input id="datasetSlider" type="range" min="0" max="2" step="1" value="0">
+                </div>
+                <div class="control">
+                    <label><span>隐藏单元数</span><b id="hiddenVal">4</b></label>
+                    <input id="hiddenSlider" type="range" min="2" max="8" step="1" value="4">
+                </div>
+                <div class="control">
+                    <label><span>显示隐藏超平面</span><b id="planeState">开</b></label>
+                    <input id="showPlanes" type="checkbox" checked>
+                </div>
+            </div>
+
+            <div class="stats">
+                <div class="stat">
+                    <div class="k">单层分类器表达能力</div>
+                    <div class="v" id="linearCap">线性</div>
+                </div>
+                <div class="stat">
+                    <div class="k">ReLU 网络表达能力</div>
+                    <div class="v" id="reluCap">分段线性</div>
+                </div>
+                <div class="stat">
+                    <div class="k">当前数据集是否线性可分</div>
+                    <div class="v" id="sepVal">否</div>
+                </div>
+                <div class="stat">
+                    <div class="k">直观原因</div>
+                    <div class="v" id="reasonVal">需多次切分</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h2>2) 高维动画：ReLU 在高维分类里到底做了什么</h2>
+            <div class="desc">
+                下方动画不再只是展示“向量被截断”，而是直接展示 <b>分类任务中的高维隐藏表示</b>。<br>
+                左图：原始高维样本在隐藏层线性变换前的投影。<br>
+                中图：经过 <b>线性变换 z = Wx + b</b> 后、进入 ReLU 之前的隐藏层预激活。<br>
+                右图：经过 <b>ReLU(z)</b> 后的隐藏层表示。负值维度被压成 0，于是很多样本会贴到某些坐标平面上；
+                不同样本进入不同激活模式后，相当于被送进不同的“局部线性区域”，这正是复杂分类边界形成的关键。
+            </div>
+            <div class="grid3">
+                <div>
+                    <div class="canvasBox"><canvas id="highInCanvas" width="430" height="420"></canvas></div>
+                    <div class="small">原始输入空间中的高维点云投影</div>
+                </div>
+                <div>
+                    <div class="canvasBox"><canvas id="preActCanvas" width="430" height="420"></canvas></div>
+                    <div class="small">隐藏层线性变换后的预激活 z=Wx+b</div>
+                </div>
+                <div>
+                    <div class="canvasBox"><canvas id="postActCanvas" width="430" height="420"></canvas></div>
+                    <div class="small">ReLU(z) 之后：负半空间被压到 0，表示变得稀疏</div>
+                </div>
+            </div>
+
+            <div class="controls">
+                <div class="control">
+                    <label><span>样本点数</span><b id="nVal">800</b></label>
+                    <input id="nSlider" type="range" min="160" max="2200" step="20" value="800">
+                </div>
+                <div class="control">
+                    <label><span>输入维度 d_in</span><b id="dinVal">10</b></label>
+                    <input id="dinSlider" type="range" min="4" max="36" step="1" value="10">
+                </div>
+                <div class="control">
+                    <label><span>隐藏维度 d_hidden</span><b id="dhVal">14</b></label>
+                    <input id="dhSlider" type="range" min="4" max="48" step="1" value="14">
+                </div>
+                <div class="control">
+                    <label><span>类别间分离度</span><b id="sepStrengthVal">1.30</b></label>
+                    <input id="sepStrengthSlider" type="range" min="0.2" max="3" step="0.01" value="1.3">
+                </div>
+                <div class="control">
+                    <label><span>动画速度</span><b id="speedVal">0.85</b></label>
+                    <input id="speedSlider" type="range" min="0" max="2.5" step="0.01" value="0.85">
+                </div>
+                <div class="control">
+                    <label><span>自动动画</span><b id="autoVal">开</b></label>
+                    <input id="autoToggle" type="checkbox" checked>
+                </div>
+            </div>
+
+            <div class="btnRow">
+                <button id="regenHigh">重新随机化高维分类任务</button>
+                <button id="pauseBtn">暂停/继续</button>
+            </div>
+
+            <div class="stats">
+                <div class="stat">
+                    <div class="k">当前时刻</div>
+                    <div class="v" id="timeVal">0.00</div>
+                </div>
+                <div class="stat">
+                    <div class="k">ReLU 后平均激活率</div>
+                    <div class="v" id="activeVal">0%</div>
+                </div>
+                <div class="stat">
+                    <div class="k">零元素占比</div>
+                    <div class="v" id="zeroVal">0%</div>
+                </div>
+                <div class="stat">
+                    <div class="k">类间投影分离感</div>
+                    <div class="v" id="classSepVal">中</div>
+                </div>
+            </div>
+
+            <div style="margin-top:14px">
+                <span class="pill">重点 1：单层分类器只能在原空间切一刀</span>
+                <span class="pill">重点 2：隐藏层先把样本映射到新的高维特征空间</span>
+                <span class="pill">重点 3：ReLU 决定每个样本落在哪个激活区域</span>
+                <span class="pill">重点 4：不同区域里仍是线性的，但整体边界会很复杂</span>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h2>3) 一句话理解两者区别</h2>
+            <div class="note">
+                <b>单层分类器：</b>直接在原始输入空间里做一次线性切分，所以只能得到一个超平面边界。<br><br>
+                <b>隐藏层 + ReLU：</b>先让很多隐藏单元各自判断“是否落在某个半空间里”，再把这些判断结果组合起来。
+                每个隐藏单元都像在空间里加了一道“折痕”，多个隐藏单元叠加后，空间会被切成很多分段区域。输出层只需对这些区域做线性组合，
+                就能拼出远比一条直线复杂的分类边界。这就是为什么即便每一步看起来都很简单，组合起来却能拟合复杂情况。
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function relu(x) { return Math.max(0, x); }
+        function sigmoid(x) { return 1 / (1 + Math.exp(-x)); }
+        function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+        function fmt(v, d = 2) { return Number(v).toFixed(d); }
+        function randn() {
+            let u = 0, v = 0;
+            while (u === 0) u = Math.random();
+            while (v === 0) v = Math.random();
+            return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+        }
+        function makeVec(n, s = 1) {
+            const a = new Array(n);
+            for (let i = 0; i < n; i++) a[i] = randn() * s;
+            return a;
+        }
+        function dot(a, b) {
+            let s = 0;
+            for (let i = 0; i < a.length; i++) s += a[i] * b[i];
+            return s;
+        }
+        function normalize(a) {
+            const n = Math.sqrt(dot(a, a)) || 1;
+            return a.map(v => v / n);
+        }
+        function matVec(M, x, b = null) {
+            const out = new Array(M.length);
+            for (let i = 0; i < M.length; i++) {
+                let s = 0;
+                for (let j = 0; j < x.length; j++) s += M[i][j] * x[j];
+                if (b) s += b[i];
+                out[i] = s;
+            }
+            return out;
+        }
+        function project3(v, p1, p2, p3) {
+            const X = dot(v, p1), Y = dot(v, p2), Z = dot(v, p3);
+            const depth = 1 / (1 + 0.12 * (Z + 4));
+            return { x: X * depth, y: Y * depth, z: Z };
+        }
+
+        const state = {
+            datasetIdx: 0,
+            hiddenUnits: 4,
+            showPlanes: true,
+            datasets: ["XOR", "双环", "中心点 vs 外围"],
+            cloudN: 800,
+            din: 10,
+            dh: 14,
+            sepStrength: 1.3,
+            speed: 0.85,
+            auto: true,
+            paused: false,
+            t: 0,
+            highPts: [],
+            highLabels: [],
+            classDir: [],
+            driftDir: [],
+            W: [],
+            b: [],
+            inProj: [],
+            preProj: [],
+            postProj: []
+        };
+
+        function datasetName() {
+            return state.datasets[state.datasetIdx];
+        }
+
+        function genDataset2D(kind, n = 480) {
+            const pts = [], labels = [];
+            if (kind === 0) { // XOR
+                for (let i = 0; i < n; i++) {
+                    const x = (Math.random() * 2 - 1) * 2.2;
+                    const y = (Math.random() * 2 - 1) * 2.2;
+                    const label = (x * y > 0) ? 1 : 0;
+                    pts.push([x, y]);
+                    labels.push(label);
+                }
+            } else if (kind === 1) { // double ring
+                for (let i = 0; i < n; i++) {
+                    const t = Math.random() * Math.PI * 2;
+                    const outer = Math.random() < 0.5;
+                    const r = (outer ? 1.8 : 0.8) + randn() * 0.09;
+                    pts.push([Math.cos(t) * r, Math.sin(t) * r]);
+                    labels.push(outer ? 1 : 0);
+                }
+            } else { // center vs outside
+                for (let i = 0; i < n; i++) {
+                    const x = (Math.random() * 2 - 1) * 2.4;
+                    const y = (Math.random() * 2 - 1) * 2.4;
+                    const r2 = x * x + y * y;
+                    pts.push([x, y]);
+                    labels.push(r2 < 1.0 ? 1 : 0);
+                }
+            }
+            return { pts, labels };
+        }
+
+        function linearScore(x, y) {
+            if (state.datasetIdx === 0) return 0.85 * x + 0.35 * y - 0.1;
+            if (state.datasetIdx === 1) return 0.9 * x - 0.2 * y;
+            return -0.3 + 0.8 * x + 0.15 * y;
+        }
+
+        function reluNetScore(x, y) {
+            const U = getHiddenParams(state.hiddenUnits, state.datasetIdx);
+            let s = U.outB;
+            for (let i = 0; i < U.hidden.length; i++) {
+                const h = U.hidden[i];
+                s += U.outW[i] * relu(h.w1 * x + h.w2 * y + h.b);
+            }
+            return s;
+        }
+
+        function getHiddenParams(k, kind) {
+            const bank = {
+                0: { // XOR
+                    hidden: [
+                        { w1: 1.2, w2: 1.2, b: -0.2 },
+                        { w1: -1.2, w2: -1.2, b: -0.2 },
+                        { w1: 1.2, w2: -1.2, b: -0.2 },
+                        { w1: -1.2, w2: 1.2, b: -0.2 },
+                        { w1: 0.0, w2: 1.5, b: -0.6 },
+                        { w1: 1.5, w2: 0.0, b: -0.6 },
+                        { w1: -1.5, w2: 0.0, b: -0.6 },
+                        { w1: 0.0, w2: -1.5, b: -0.6 },
+                    ],
+                    outW: [-1.4, -1.4, 1.8, 1.8, 0.4, 0.4, 0.4, 0.4],
+                    outB: -0.1
+                },
+                1: { // rings
+                    hidden: [
+                        { w1: 1.0, w2: 0.0, b: -0.7 },
+                        { w1: -1.0, w2: 0.0, b: -0.7 },
+                        { w1: 0.0, w2: 1.0, b: -0.7 },
+                        { w1: 0.0, w2: -1.0, b: -0.7 },
+                        { w1: 1.2, w2: 1.2, b: -1.1 },
+                        { w1: -1.2, w2: 1.2, b: -1.1 },
+                        { w1: 1.2, w2: -1.2, b: -1.1 },
+                        { w1: -1.2, w2: -1.2, b: -1.1 },
+                    ],
+                    outW: [1.0, 1.0, 1.0, 1.0, -0.8, -0.8, -0.8, -0.8],
+                    outB: -0.55
+                },
+                2: { // center vs outside
+                    hidden: [
+                        { w1: 1.0, w2: 0.0, b: -0.7 },
+                        { w1: -1.0, w2: 0.0, b: -0.7 },
+                        { w1: 0.0, w2: 1.0, b: -0.7 },
+                        { w1: 0.0, w2: -1.0, b: -0.7 },
+                        { w1: 1.1, w2: 1.1, b: -0.95 },
+                        { w1: -1.1, w2: 1.1, b: -0.95 },
+                        { w1: 1.1, w2: -1.1, b: -0.95 },
+                        { w1: -1.1, w2: -1.1, b: -0.95 },
+                    ],
+                    outW: [-1.0, -1.0, -1.0, -1.0, 0.9, 0.9, 0.9, 0.9],
+                    outB: 1.0
+                }
+            };
+            const cfg = bank[kind];
+            return {
+                hidden: cfg.hidden.slice(0, k),
+                outW: cfg.outW.slice(0, k),
+                outB: cfg.outB
+            };
+        }
+
+        const linearCanvas = document.getElementById('linearCanvas');
+        const reluNetCanvas = document.getElementById('reluNetCanvas');
+        const lctx = linearCanvas.getContext('2d');
+        const rctx = reluNetCanvas.getContext('2d');
+
+        function drawBoundaryScene(ctx, canvas, useRelu) {
+            const w = canvas.width, h = canvas.height;
+            ctx.clearRect(0, 0, w, h);
+            ctx.fillStyle = '#0a1127';
+            ctx.fillRect(0, 0, w, h);
+
+            const xMin = -2.6, xMax = 2.6, yMin = -2.6, yMax = 2.6;
+            const px = x => 40 + (x - xMin) / (xMax - xMin) * (w - 80);
+            const py = y => h - 40 - (y - yMin) / (yMax - yMin) * (h - 80);
+
+            const step = 8;
+            for (let ix = 0; ix < w; ix += step) {
+                for (let iy = 0; iy < h; iy += step) {
+                    const x = xMin + (ix / (w - 1)) * (xMax - xMin);
+                    const y = yMin + ((h - 1 - iy) / (h - 1)) * (yMax - yMin);
+                    const s = useRelu ? reluNetScore(x, y) : linearScore(x, y);
+                    ctx.fillStyle = s > 0 ? 'rgba(125,255,164,.12)' : 'rgba(255,156,156,.12)';
+                    ctx.fillRect(ix, iy, step, step);
+                }
+            }
+
+            ctx.strokeStyle = 'rgba(255,255,255,.08)';
+            for (let i = -2; i <= 2; i++) {
+                ctx.beginPath(); ctx.moveTo(px(i), 20); ctx.lineTo(px(i), h - 40); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(40, py(i)); ctx.lineTo(w - 40, py(i)); ctx.stroke();
+            }
+            ctx.strokeStyle = 'rgba(255,255,255,.25)';
+            ctx.beginPath(); ctx.moveTo(px(0), 20); ctx.lineTo(px(0), h - 40); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(40, py(0)); ctx.lineTo(w - 40, py(0)); ctx.stroke();
+
+            const data = genDataset2D(state.datasetIdx, 520);
+
+            if (useRelu && state.showPlanes) {
+                const U = getHiddenParams(state.hiddenUnits, state.datasetIdx);
+                ctx.setLineDash([5, 5]);
+                ctx.lineWidth = 1.1;
+                ctx.strokeStyle = 'rgba(199,166,255,.45)';
+                for (const hparam of U.hidden) {
+                    const { w1, w2, b } = hparam;
+                    if (Math.abs(w2) > 1e-6) {
+                        const x1 = xMin, y1 = -(w1 * x1 + b) / w2;
+                        const x2 = xMax, y2 = -(w1 * x2 + b) / w2;
+                        ctx.beginPath();
+                        ctx.moveTo(px(x1), py(y1));
+                        ctx.lineTo(px(x2), py(y2));
+                        ctx.stroke();
+                    } else {
+                        const x = -b / w1;
+                        ctx.beginPath();
+                        ctx.moveTo(px(x), py(yMin));
+                        ctx.lineTo(px(x), py(yMax));
+                        ctx.stroke();
+                    }
+                }
+                ctx.setLineDash([]);
+            }
+
+            ctx.strokeStyle = useRelu ? '#7cc7ff' : '#ffd56b';
+            ctx.lineWidth = 2.2;
+            const grid = 120;
+            for (let i = 0; i < grid - 1; i++) {
+                for (let j = 0; j < grid - 1; j++) {
+                    const xa = xMin + i / (grid - 1) * (xMax - xMin);
+                    const xb = xMin + (i + 1) / (grid - 1) * (xMax - xMin);
+                    const ya = yMin + j / (grid - 1) * (yMax - yMin);
+                    const yb = yMin + (j + 1) / (grid - 1) * (yMax - yMin);
+                    const f00 = useRelu ? reluNetScore(xa, ya) : linearScore(xa, ya);
+                    const f10 = useRelu ? reluNetScore(xb, ya) : linearScore(xb, ya);
+                    const f01 = useRelu ? reluNetScore(xa, yb) : linearScore(xa, yb);
+                    if (f00 === 0 || f00 * f10 < 0) {
+                        const t = f00 / (f00 - f10);
+                        const x = xa + t * (xb - xa), y = ya;
+                        ctx.beginPath();
+                        ctx.arc(px(x), py(y), 0.8, 0, Math.PI * 2);
+                        ctx.stroke();
+                    }
+                    if (f00 === 0 || f00 * f01 < 0) {
+                        const t = f00 / (f00 - f01);
+                        const x = xa, y = ya + t * (yb - ya);
+                        ctx.beginPath();
+                        ctx.arc(px(x), py(y), 0.8, 0, Math.PI * 2);
+                        ctx.stroke();
+                    }
+                }
+            }
+
+            for (let i = 0; i < data.pts.length; i++) {
+                const [x, y] = data.pts[i];
+                const label = data.labels[i];
+                ctx.beginPath();
+                ctx.arc(px(x), py(y), 4.0, 0, Math.PI * 2);
+                ctx.fillStyle = label ? 'rgba(125,255,164,.92)' : 'rgba(255,156,156,.92)';
+                ctx.fill();
+                ctx.strokeStyle = 'rgba(0,0,0,.28)';
+                ctx.stroke();
+            }
+
+            ctx.fillStyle = 'rgba(255,255,255,.88)';
+            ctx.font = '15px sans-serif';
+            ctx.fillText(useRelu ? '隐藏层 + ReLU 网络边界' : '单层线性分类器边界', 18, 26);
+        }
+
+        const highInCanvas = document.getElementById('highInCanvas');
+        const preActCanvas = document.getElementById('preActCanvas');
+        const postActCanvas = document.getElementById('postActCanvas');
+        const inCtx = highInCanvas.getContext('2d');
+        const preCtx = preActCanvas.getContext('2d');
+        const postCtx = postActCanvas.getContext('2d');
+
+        function regenHighTask() {
+            state.highPts = [];
+            state.highLabels = [];
+            state.classDir = normalize(makeVec(state.din, 1));
+            state.driftDir = normalize(makeVec(state.din, 1));
+
+            for (let i = 0; i < state.cloudN; i++) {
+                const label = Math.random() < 0.5 ? 0 : 1;
+                const base = makeVec(state.din, 0.9);
+                const shift = state.classDir.map(v => v * state.sepStrength * (label ? 1 : -1));
+                const p = base.map((x, j) => x + shift[j]);
+                state.highPts.push(p);
+                state.highLabels.push(label);
+            }
+
+            state.W = [];
+            state.b = [];
+            for (let i = 0; i < state.dh; i++) {
+                state.W.push(makeVec(state.din, 0.75 / Math.sqrt(state.din / 6)));
+                state.b.push(randn() * 0.6);
+            }
+
+            state.inProj = [normalize(makeVec(state.din, 1)), normalize(makeVec(state.din, 1)), normalize(makeVec(state.din, 1))];
+            state.preProj = [normalize(makeVec(state.dh, 1)), normalize(makeVec(state.dh, 1)), normalize(makeVec(state.dh, 1))];
+            state.postProj = [normalize(makeVec(state.dh, 1)), normalize(makeVec(state.dh, 1)), normalize(makeVec(state.dh, 1))];
+        }
+
+        function drawHighCloud(ctx, canvas, mode) {
+            const w = canvas.width, h = canvas.height;
+            ctx.clearRect(0, 0, w, h);
+            ctx.fillStyle = '#0a1127';
+            ctx.fillRect(0, 0, w, h);
+
+            ctx.strokeStyle = 'rgba(255,255,255,.07)';
+            for (let i = 1; i < 7; i++) {
+                const x = i * w / 7, y = i * h / 7;
+                ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+            }
+            ctx.strokeStyle = 'rgba(255,255,255,.22)';
+            ctx.beginPath(); ctx.moveTo(w / 2, 12); ctx.lineTo(w / 2, h - 12); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(12, h / 2); ctx.lineTo(w - 12, h / 2); ctx.stroke();
+
+            let activeSum = 0, zeroCount = 0, total = 0;
+            let cls0 = [], cls1 = [];
+            const drift = state.driftDir.map(v => v * Math.sin(state.t * 0.9) * 1.1);
+
+            for (let i = 0; i < state.highPts.length; i++) {
+                const x = state.highPts[i].map((v, j) => v + drift[j]);
+                const label = state.highLabels[i];
+                let vec, proj;
+                if (mode === 'input') {
+                    vec = x;
+                    proj = state.inProj;
+                } else {
+                    const z = matVec(state.W, x, state.b);
+                    if (mode === 'pre') {
+                        vec = z;
+                        proj = state.preProj;
+                    } else {
+                        vec = z.map(relu);
+                        proj = state.postProj;
+                        let act = 0;
+                        for (const q of vec) {
+                            if (q > 0) act++;
+                            else zeroCount++;
+                            total++;
+                        }
+                        activeSum += act / vec.length;
+                    }
+                }
+                const p = project3(vec, proj[0], proj[1], proj[2]);
+                if (label) cls1.push(p); else cls0.push(p);
+            }
+
+            const all = cls0.map(p => ({ p, label: 0 })).concat(cls1.map(p => ({ p, label: 1 })));
+            all.sort((a, b) => a.p.z - b.p.z);
+
+            for (const item of all) {
+                const p = item.p;
+                const X = w / 2 + p.x * 48;
+                const Y = h / 2 - p.y * 48;
+                const r = clamp(2.2 + 0.25 * p.z, 1.2, 4.0);
+                ctx.beginPath();
+                ctx.arc(X, Y, r, 0, Math.PI * 2);
+                ctx.fillStyle = item.label ? 'rgba(125,255,164,.56)' : 'rgba(255,156,156,.56)';
+                ctx.fill();
+            }
+
+            ctx.fillStyle = 'rgba(255,255,255,.88)';
+            ctx.font = '14px sans-serif';
+            const title = mode === 'input' ? '输入空间投影' : (mode === 'pre' ? '预激活 z=Wx+b' : 'ReLU(z) 后表示');
+            ctx.fillText(title, 14, 24);
+
+            if (mode === 'post') {
+                const meanActive = activeSum / state.highPts.length;
+                document.getElementById('activeVal').textContent = Math.round(meanActive * 100) + '%';
+                document.getElementById('zeroVal').textContent = Math.round(zeroCount / Math.max(total, 1) * 100) + '%';
+                document.getElementById('timeVal').textContent = fmt(state.t, 2);
+
+                const sepText = state.sepStrength < 0.8 ? '弱' : (state.sepStrength < 1.7 ? '中' : '强');
+                document.getElementById('classSepVal').textContent = sepText;
+            }
+        }
+
+        function drawAll() {
+            drawBoundaryScene(lctx, linearCanvas, false);
+            drawBoundaryScene(rctx, reluNetCanvas, true);
+            drawHighCloud(inCtx, highInCanvas, 'input');
+            drawHighCloud(preCtx, preActCanvas, 'pre');
+            drawHighCloud(postCtx, postActCanvas, 'post');
+
+            document.getElementById('datasetName').textContent = datasetName();
+            document.getElementById('hiddenVal').textContent = state.hiddenUnits;
+            document.getElementById('planeState').textContent = state.showPlanes ? '开' : '关';
+
+            const linearSeparable = state.datasetIdx === 0 ? '否' : '否';
+            const reason = state.datasetIdx === 0 ? 'XOR 需多次切分' : (state.datasetIdx === 1 ? '环形边界非直线' : '中心区域需包围');
+            document.getElementById('sepVal').textContent = linearSeparable;
+            document.getElementById('reasonVal').textContent = reason;
+        }
+
+        function animate() {
+            if (state.auto && !state.paused) {
+                state.t += 0.016 * state.speed;
+            }
+            drawAll();
+            requestAnimationFrame(animate);
+        }
+
+        document.getElementById('datasetSlider').addEventListener('input', e => {
+            state.datasetIdx = parseInt(e.target.value);
+        });
+        document.getElementById('hiddenSlider').addEventListener('input', e => {
+            state.hiddenUnits = parseInt(e.target.value);
+        });
+        document.getElementById('showPlanes').addEventListener('change', e => {
+            state.showPlanes = e.target.checked;
+        });
+
+        document.getElementById('nSlider').addEventListener('input', e => {
+            state.cloudN = parseInt(e.target.value);
+            document.getElementById('nVal').textContent = state.cloudN;
+            regenHighTask();
+        });
+        document.getElementById('dinSlider').addEventListener('input', e => {
+            state.din = parseInt(e.target.value);
+            document.getElementById('dinVal').textContent = state.din;
+            regenHighTask();
+        });
+        document.getElementById('dhSlider').addEventListener('input', e => {
+            state.dh = parseInt(e.target.value);
+            document.getElementById('dhVal').textContent = state.dh;
+            regenHighTask();
+        });
+        document.getElementById('sepStrengthSlider').addEventListener('input', e => {
+            state.sepStrength = parseFloat(e.target.value);
+            document.getElementById('sepStrengthVal').textContent = fmt(state.sepStrength);
+            regenHighTask();
+        });
+        document.getElementById('speedSlider').addEventListener('input', e => {
+            state.speed = parseFloat(e.target.value);
+            document.getElementById('speedVal').textContent = fmt(state.speed);
+        });
+        document.getElementById('autoToggle').addEventListener('change', e => {
+            state.auto = e.target.checked;
+            document.getElementById('autoVal').textContent = state.auto ? '开' : '关';
+        });
+        document.getElementById('regenHigh').addEventListener('click', regenHighTask);
+        document.getElementById('pauseBtn').addEventListener('click', () => { state.paused = !state.paused; });
+
+        regenHighTask();
+        drawAll();
+        animate();
+    </script>
+</body>
+
+</html>

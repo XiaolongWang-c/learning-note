@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ResNet 为什么更容易训练 - 动画解释</title>
+  <style>
+    :root {
+      --bg: #0b1020;
+      --panel: #121932;
+      --panel-2: #192246;
+      --text: #e9eefc;
+      --muted: #9fb0da;
+      --line: #31406f;
+      --accent: #7cc8ff;
+      --accent-2: #8dffbd;
+      --danger: #ff9c9c;
+      --warn: #ffd37c;
+      --shadow: 0 10px 30px rgba(0,0,0,.28);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; background: radial-gradient(circle at top, #111b3d 0%, var(--bg) 45%, #070b16 100%); color: var(--text); font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    body { min-height: 100vh; }
+
+    .wrap {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 28px;
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: 1.15fr .85fr;
+      gap: 20px;
+      align-items: stretch;
+    }
+
+    .card {
+      background: linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.015));
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: 24px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(10px);
+    }
+
+    .hero-main {
+      padding: 28px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero-main::after {
+      content: "";
+      position: absolute;
+      inset: auto -120px -120px auto;
+      width: 280px;
+      height: 280px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(124,200,255,.24), rgba(124,200,255,0));
+      pointer-events: none;
+    }
+
+    h1 {
+      font-size: clamp(28px, 4vw, 44px);
+      line-height: 1.1;
+      margin: 0 0 12px;
+      letter-spacing: -0.03em;
+    }
+
+    p.lead {
+      color: var(--muted);
+      font-size: 16px;
+      line-height: 1.7;
+      margin: 0;
+      max-width: 64ch;
+    }
+
+    .badge-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin: 18px 0 0;
+    }
+
+    .badge {
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(124,200,255,.12);
+      color: #dff3ff;
+      border: 1px solid rgba(124,200,255,.25);
+      font-size: 13px;
+    }
+
+    .hero-side {
+      padding: 22px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .formula {
+      background: var(--panel-2);
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: 18px;
+      padding: 14px 16px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 15px;
+      color: #eef5ff;
+      overflow: auto;
+      white-space: nowrap;
+    }
+
+    .small-note {
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.65;
+    }
+
+    .section {
+      margin-top: 22px;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 20px;
+    }
+
+    .controls {
+      padding: 18px 20px;
+      display: grid;
+      grid-template-columns: 1.3fr .9fr;
+      gap: 18px;
+      align-items: center;
+    }
+
+    .tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .tab, .btn {
+      appearance: none;
+      border: 1px solid rgba(255,255,255,.1);
+      background: #1a2245;
+      color: var(--text);
+      padding: 10px 14px;
+      border-radius: 14px;
+      cursor: pointer;
+      transition: transform .18s ease, background .18s ease, border-color .18s ease, opacity .18s ease;
+      font-size: 14px;
+    }
+
+    .tab:hover, .btn:hover { transform: translateY(-1px); }
+    .tab.active {
+      background: linear-gradient(180deg, #2a3870, #202d5e);
+      border-color: rgba(124,200,255,.35);
+      color: #fff;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.03);
+    }
+
+    .btn-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .btn.primary {
+      background: linear-gradient(180deg, #2b8cff, #256fe6);
+      border-color: rgba(255,255,255,.15);
+      color: white;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+
+    .panel {
+      padding: 18px;
+      min-height: 520px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .panel h2 {
+      font-size: 22px;
+      margin: 0 0 8px;
+      letter-spacing: -0.02em;
+    }
+
+    .panel p {
+      color: var(--muted);
+      margin: 0 0 14px;
+      line-height: 1.65;
+      font-size: 14px;
+    }
+
+    .scene {
+      position: relative;
+      height: 350px;
+      border-radius: 20px;
+      background: linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.01));
+      border: 1px solid rgba(255,255,255,.08);
+      overflow: hidden;
+    }
+
+    .scene-grid {
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(255,255,255,.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,.05) 1px, transparent 1px);
+      background-size: 24px 24px;
+      mask-image: linear-gradient(180deg, rgba(255,255,255,.6), rgba(255,255,255,.15));
+      pointer-events: none;
+    }
+
+    .layers {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-evenly;
+      padding: 20px;
+    }
+
+    .layer {
+      width: 76px;
+      height: 220px;
+      border-radius: 18px;
+      border: 1px solid rgba(255,255,255,.12);
+      background: linear-gradient(180deg, rgba(255,255,255,.09), rgba(255,255,255,.03));
+      position: relative;
+      overflow: hidden;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.02);
+    }
+
+    .layer::before {
+      content: attr(data-label);
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 12px;
+      color: #d8e3ff;
+      white-space: nowrap;
+    }
+
+    .bar {
+      position: absolute;
+      left: 14px;
+      right: 14px;
+      bottom: 18px;
+      border-radius: 14px;
+      background: linear-gradient(180deg, rgba(124,200,255,.95), rgba(124,200,255,.45));
+      box-shadow: 0 0 20px rgba(124,200,255,.22);
+      transition: height .45s ease, opacity .45s ease, transform .45s ease;
+    }
+
+    .bar.good { background: linear-gradient(180deg, rgba(141,255,189,.95), rgba(141,255,189,.4)); box-shadow: 0 0 20px rgba(141,255,189,.18); }
+    .bar.bad  { background: linear-gradient(180deg, rgba(255,156,156,.95), rgba(255,156,156,.42)); box-shadow: 0 0 20px rgba(255,156,156,.18); }
+
+    .flow, .skip {
+      position: absolute;
+      height: 3px;
+      background: linear-gradient(90deg, rgba(255,255,255,.15), var(--accent), rgba(255,255,255,.15));
+      border-radius: 999px;
+      transform-origin: left center;
+      overflow: hidden;
+      opacity: .9;
+    }
+
+    .flow::after, .skip::after {
+      content: "";
+      position: absolute;
+      inset: -3px auto -3px -20%;
+      width: 20%;
+      background: linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,.95), rgba(255,255,255,0));
+      animation: move 2.2s linear infinite;
+    }
+
+    .skip {
+      height: 4px;
+      background: linear-gradient(90deg, rgba(141,255,189,.15), var(--accent-2), rgba(141,255,189,.15));
+      box-shadow: 0 0 16px rgba(141,255,189,.22);
+    }
+
+    @keyframes move {
+      from { left: -20%; }
+      to   { left: 110%; }
+    }
+
+    .annotation {
+      margin-top: 16px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+
+    .mini {
+      background: var(--panel-2);
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: 18px;
+      padding: 14px;
+      min-height: 102px;
+    }
+
+    .mini h3 {
+      margin: 0 0 6px;
+      font-size: 15px;
+    }
+
+    .mini .value {
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: -.02em;
+      margin-bottom: 6px;
+    }
+
+    .explain {
+      margin-top: 20px;
+      padding: 22px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+    }
+
+    .bullet {
+      background: var(--panel-2);
+      border-radius: 18px;
+      border: 1px solid rgba(255,255,255,.08);
+      padding: 16px;
+    }
+
+    .bullet h3 { margin: 0 0 8px; font-size: 16px; }
+    .bullet p  { margin: 0; color: var(--muted); line-height: 1.7; font-size: 14px; }
+
+    .math-board {
+      margin-top: 20px;
+      padding: 20px;
+    }
+
+    .math-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    .math-card {
+      background: var(--panel-2);
+      border-radius: 18px;
+      border: 1px solid rgba(255,255,255,.08);
+      padding: 16px;
+    }
+
+    .math-card h3 { margin: 0 0 10px; font-size: 16px; }
+    .math-card p { margin: 8px 0 0; color: var(--muted); line-height: 1.7; font-size: 14px; }
+
+    .bottom {
+      margin-top: 20px;
+      padding: 22px;
+    }
+
+    .slider-wrap {
+      display: grid;
+      grid-template-columns: 130px 1fr 60px;
+      gap: 14px;
+      align-items: center;
+      margin-top: 12px;
+    }
+
+    input[type="range"] { width: 100%; }
+
+    .footer-note {
+      margin-top: 14px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.7;
+    }
+
+    @media (max-width: 1080px) {
+      .hero, .controls, .grid-2, .explain, .math-grid { grid-template-columns: 1fr; }
+      .btn-row { justify-content: flex-start; }
+    }
+
+    @media (max-width: 720px) {
+      .wrap { padding: 16px; }
+      .panel { min-height: auto; }
+      .scene { height: 300px; }
+      .layer { width: 58px; height: 190px; }
+      .annotation { grid-template-columns: 1fr; }
+      .hero-main, .hero-side, .panel, .math-board, .bottom, .controls { padding: 16px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <section class="hero">
+      <div class="card hero-main">
+        <h1>ResNet 为什么更容易训练</h1>
+        <p class="lead">
+          这个动画页专门解释一个核心问题：深层网络不是因为“最后分类难”，而是因为<strong>前面层的梯度在反向传播中变弱</strong>，导致浅层学不动。残差连接把“纯连乘”变成“恒等通路 + 小扰动”，所以信息和梯度都更容易通过。
+        </p>
+        <div class="badge-row">
+          <div class="badge">普通深层网络：h = F(x)</div>
+          <div class="badge">残差网络：h = x + F(x)</div>
+          <div class="badge">核心：让梯度不至于消失</div>
+        </div>
+      </div>
+      <div class="card hero-side">
+        <div>
+          <div class="small-note">前向传播里的差别</div>
+          <div class="formula">普通层： h = F(x)</div>
+          <div class="formula">残差层： h = x + F(x)</div>
+        </div>
+        <div>
+          <div class="small-note">反向传播里的关键差别</div>
+          <div class="formula">普通层： ∂L/∂x = ∂L/∂h · ∂F/∂x</div>
+          <div class="formula">残差层： ∂L/∂x = ∂L/∂h · ( I + ∂F/∂x )</div>
+        </div>
+        <div class="small-note">
+          这里的 <strong>I</strong> 是最关键的一项。它意味着：即使 <strong>∂F/∂x</strong> 很小，梯度也还能沿着恒等路径传回去，而不是完全被层层连乘压扁。
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="card controls">
+        <div>
+          <div class="tabs" id="modeTabs">
+            <button class="tab active" data-mode="forward">看前向：信息怎么走</button>
+            <button class="tab" data-mode="backward">看反向：梯度怎么走</button>
+            <button class="tab" data-mode="compare">看对比：普通网络 vs ResNet</button>
+          </div>
+          <div class="slider-wrap">
+            <label for="depthSlider">网络层数</label>
+            <input id="depthSlider" type="range" min="3" max="10" value="6" />
+            <div id="depthValue">6 层</div>
+          </div>
+        </div>
+        <div class="btn-row">
+          <button class="btn" id="slowBtn">慢速</button>
+          <button class="btn active-like" id="normalBtn">正常</button>
+          <button class="btn" id="fastBtn">快速</button>
+          <button class="btn primary" id="replayBtn">重新播放</button>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card panel">
+          <h2>普通深层网络</h2>
+          <p id="plainDesc">当前展示前向传播：信息必须层层经过变换函数 F，若中间层学得不好，信息会逐层被扭曲。</p>
+          <div class="scene" id="plainScene">
+            <div class="scene-grid"></div>
+            <div class="layers" id="plainLayers"></div>
+          </div>
+          <div class="annotation">
+            <div class="mini">
+              <h3>信息保真度</h3>
+              <div class="value" id="plainInfo">61%</div>
+              <div class="small-note">普通网络中，信息必须穿过每一层变换，深层时更容易失真。</div>
+            </div>
+            <div class="mini">
+              <h3>梯度强度</h3>
+              <div class="value" id="plainGrad">0.031</div>
+              <div class="small-note">反向传播时梯度会连乘，层数一深，前层梯度很容易接近 0。</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card panel">
+          <h2>ResNet / 残差网络</h2>
+          <p id="resDesc">当前展示前向传播：除变换路径 F(x) 外，还存在一条恒等直通路径 x，所以每层更像“在已有表示上做修正”。</p>
+          <div class="scene" id="resScene">
+            <div class="scene-grid"></div>
+            <div class="layers" id="resLayers"></div>
+          </div>
+          <div class="annotation">
+            <div class="mini">
+              <h3>信息保真度</h3>
+              <div class="value" id="resInfo">89%</div>
+              <div class="small-note">因为 x 可以直通，前面学到的表示不容易被后续层破坏。</div>
+            </div>
+            <div class="mini">
+              <h3>梯度强度</h3>
+              <div class="value" id="resGrad">0.73</div>
+              <div class="small-note">梯度除了经过 ∂F/∂x，还能沿着单位映射 I 的通路传播。</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card explain">
+        <div class="bullet">
+          <h3>为什么“最后全连接分类”并不是主要难点</h3>
+          <p>
+            如果深层特征真的学得好，最后的线性层或全连接层通常并不难。真正的问题在于：普通深层网络中，<strong>前面的特征层未必能被有效训练出来</strong>。一旦浅层参数几乎不更新，后面拿到的中间表示就不够好，最后分类自然也不会好。
+          </p>
+        </div>
+        <div class="bullet">
+          <h3>为什么“skip connection”不只是参考</h3>
+          <p>
+            skip connection 不是“把上一层结果给下一层参考一下”，而是<strong>直接参与输出</strong>：<strong>h = x + F(x)</strong>。因此它不是辅助信息，而是输出的一部分；同时这条恒等路径也会在反向传播时为梯度提供直达通路。
+          </p>
+        </div>
+        <div class="bullet">
+          <h3>为什么可以把残差看成“增量更新”</h3>
+          <p>
+            每个残差块不必重新定义一个全新的表示，它只需要回答：<strong>“在已有表示 x 的基础上，我还需要改多少？”</strong> 这就是残差 <strong>F(x)</strong>。如果某一层没有必要做复杂变换，学成 <strong>F(x) ≈ 0</strong> 就可以退化为恒等映射。
+          </p>
+        </div>
+        <div class="bullet">
+          <h3>为什么普通网络在深层时更难优化</h3>
+          <p>
+            反向传播中梯度要经过链式法则连乘：<strong>∂L/∂x = ∂L/∂h · Π(∂hᶩ/∂hᶩ⁻¹)</strong>。若每层导数范数平均略小于 1，那么层数变深后整体就会指数级衰减。越靠前的层，拿到的梯度越弱，参数更新越无效。
+          </p>
+        </div>
+      </div>
+
+      <div class="card math-board">
+        <div class="math-grid">
+          <div class="math-card">
+            <h3>普通深层网络：为什么梯度会弱</h3>
+            <div class="formula">∂L/∂x = ∂L/∂h · ∂Fₙ/∂hₙ₋₁ · ∂Fₙ₋₁/∂hₙ₋₂ · ... · ∂F₁/∂x</div>
+            <p>
+              这是一个“很多项连续相乘”的结构。如果这些导数项平均略小于 1，那么随着层数增加，最终传回最前面的梯度会迅速衰减。因此不是网络不能表达，而是<strong>训练过程中前层拿不到有效信号</strong>。
+            </p>
+          </div>
+          <div class="math-card">
+            <h3>残差网络：为什么梯度更容易保住</h3>
+            <div class="formula">h = x + F(x), ∂h/∂x = I + ∂F/∂x</div>
+            <p>
+              关键是多了单位映射 <strong>I</strong>。它相当于告诉梯度：就算变换分支 <strong>F</strong> 当前学得一般，也还有一条直接路径能把信号传回去。所以残差连接并不是保证“梯度完全不变”，而是显著降低“梯度消失”的风险。
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div class="card bottom">
+        <h2 style="margin:0 0 8px;font-size:22px;">你可以这样记住</h2>
+        <p class="lead" style="font-size:15px;max-width:none;">
+          普通深层网络的问题不是“最后分类太难”，而是“前面层越来越学不动”。<br>
+          残差连接也不是“拿上一层参考一下”，而是让 <strong>x 直接成为输出的一部分</strong>，于是每一层都更像：<strong>旧表示 + 小修正</strong>。<br>
+          这就是为什么 ResNet 解决的不是“层数更多”本身，而是<strong>深层网络为什么难优化</strong>。
+        </p>
+        <div class="footer-note">
+          提示：你可以把这个文件直接保存为 .html 打开；也可以继续让我把它改成“课堂讲解版”“更学术版”“更卡通版”，或者加入你前面问过的卷积、感受野、全连接层动画联动讲解。
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const state = {
+      mode: 'forward',
+      depth: 6,
+      speed: 1,
+    };
+
+    const depthSlider = document.getElementById('depthSlider');
+    const depthValue = document.getElementById('depthValue');
+    const plainLayers = document.getElementById('plainLayers');
+    const resLayers = document.getElementById('resLayers');
+    const plainInfo = document.getElementById('plainInfo');
+    const plainGrad = document.getElementById('plainGrad');
+    const resInfo = document.getElementById('resInfo');
+    const resGrad = document.getElementById('resGrad');
+    const plainDesc = document.getElementById('plainDesc');
+    const resDesc = document.getElementById('resDesc');
+
+    const tabs = [...document.querySelectorAll('.tab')];
+    const replayBtn = document.getElementById('replayBtn');
+    const slowBtn = document.getElementById('slowBtn');
+    const normalBtn = document.getElementById('normalBtn');
+    const fastBtn = document.getElementById('fastBtn');
+
+    function setSpeed(v) {
+      state.speed = v;
+      [slowBtn, normalBtn, fastBtn].forEach(btn => btn.style.outline = 'none');
+      slowBtn.style.background = v === 1.6 ? '#29335f' : '#1a2245';
+      normalBtn.style.background = v === 1 ? '#29335f' : '#1a2245';
+      fastBtn.style.background = v === 0.6 ? '#29335f' : '#1a2245';
+      renderScenes();
+    }
+
+    slowBtn.addEventListener('click', () => setSpeed(1.6));
+    normalBtn.addEventListener('click', () => setSpeed(1));
+    fastBtn.addEventListener('click', () => setSpeed(0.6));
+
+    depthSlider.addEventListener('input', (e) => {
+      state.depth = Number(e.target.value);
+      depthValue.textContent = `${state.depth} 层`;
+      renderScenes();
+    });
+
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        tabs.forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        state.mode = tab.dataset.mode;
+        renderScenes();
+      });
+    });
+
+    replayBtn.addEventListener('click', () => {
+      renderScenes(true);
+    });
+
+    function makeLayer(label, barHeight, className='') {
+      const el = document.createElement('div');
+      el.className = 'layer';
+      el.dataset.label = label;
+      const bar = document.createElement('div');
+      bar.className = `bar ${className}`;
+      bar.style.height = `${barHeight}px`;
+      el.appendChild(bar);
+      return el;
+    }
+
+    function makeFlow(left, top, width, kind='flow', delay=0) {
+      const el = document.createElement('div');
+      el.className = kind;
+      el.style.left = `${left}px`;
+      el.style.top = `${top}px`;
+      el.style.width = `${width}px`;
+      el.style.animationDuration = `${2.2 * state.speed}s`;
+      el.style.animationDelay = `${delay}s`;
+      const after = document.createElement('style');
+      el.style.setProperty('--dummy', '0');
+      return el;
+    }
+
+    function calculateMetrics(depth) {
+      const plainGradient = Math.pow(0.55, depth - 1);
+      const plainInformation = Math.max(0.28, 0.88 - depth * 0.045);
+      const resGradient = Math.max(0.52, 0.92 - depth * 0.03);
+      const resInformation = Math.max(0.72, 0.96 - depth * 0.012);
+      return { plainGradient, plainInformation, resGradient, resInformation };
+    }
+
+    function buildScene(container, type) {
+      container.innerHTML = '';
+      const count = state.depth;
+      const width = container.parentElement.clientWidth || 500;
+      const sceneWidth = container.clientWidth || 500;
+
+      const layers = [];
+      for (let i = 0; i < count; i++) {
+        const ratio = i / Math.max(1, count - 1);
+        let h = 150 - i * 8;
+        let cls = '';
+
+        if (state.mode === 'backward') {
+          if (type === 'plain') {
+            h = 25 + Math.pow(0.55, count - 1 - i) * 150;
+            cls = i < Math.ceil(count / 2) ? 'bad' : '';
+          } else {
+            h = 80 + (1 - Math.abs((count - 1 - i) / count)) * 70;
+            cls = 'good';
+          }
+        } else if (state.mode === 'compare') {
+          if (type === 'plain') {
+            h = 110 - i * 7;
+            cls = i > Math.floor(count / 2) ? 'bad' : '';
+          } else {
+            h = 120 - i * 3;
+            cls = 'good';
+          }
+        } else {
+          if (type === 'plain') {
+            h = 135 - i * 9;
+          } else {
+            h = 132 - i * 4;
+            cls = 'good';
+          }
+        }
+
+        const label = i === 0 ? '输入' : (i === count - 1 ? '输出' : `层 ${i}`);
+        const layer = makeLayer(label, Math.max(22, h), cls);
+        layers.push(layer);
+        container.appendChild(layer);
+      }
+
+      requestAnimationFrame(() => {
+        const rects = layers.map(l => l.getBoundingClientRect());
+        const parentRect = container.getBoundingClientRect();
+
+        for (let i = 0; i < layers.length - 1; i++) {
+          const a = rects[i];
+          const b = rects[i + 1];
+          const left = a.right - parentRect.left;
+          const top = (a.top + a.height / 2) - parentRect.top;
+          const width = (b.left - a.right);
+          const flow = makeFlow(left, top, Math.max(22, width), 'flow', i * 0.08);
+          flow.style.animationDuration = `${2.2 * state.speed}s`;
+          container.appendChild(flow);
+        }
+
+        if (type === 'res') {
+          for (let i = 0; i < layers.length - 1; i++) {
+            const a = rects[i];
+            const b = rects[i + 1];
+            const left = a.right - parentRect.left;
+            const top = Math.max(24, (a.top - parentRect.top) - 20);
+            const width = (b.left - a.right);
+            const skip = makeFlow(left, top, Math.max(22, width), 'skip', i * 0.06);
+            skip.style.animationDuration = `${1.8 * state.speed}s`;
+            container.appendChild(skip);
+          }
+        }
+      });
+    }
+
+    function renderText() {
+      if (state.mode === 'forward') {
+        plainDesc.textContent = '当前展示前向传播：普通网络中，信息必须逐层穿过 F；层数越深，中间表示越容易被不断改写。';
+        resDesc.textContent = '当前展示前向传播：ResNet 中除了 F(x) 分支，还有恒等直通路径 x，因此每层更像在已有表示上做增量修正。';
+      } else if (state.mode === 'backward') {
+        plainDesc.textContent = '当前展示反向传播：梯度必须沿着每层导数连乘回去，越靠前层通常越弱，更新也越无效。';
+        resDesc.textContent = '当前展示反向传播：梯度除了走变换分支，还能沿着 identity 通路回传，因此更不容易消失。';
+      } else {
+        plainDesc.textContent = '当前展示结构对比：普通深层网络的路径完全依赖层层变换，优化时容易出现前层学不动。';
+        resDesc.textContent = '当前展示结构对比：残差连接让网络更像“主干 + 修正”，深度增加时更稳定。';
+      }
+    }
+
+    function renderScenes(replay = false) {
+      renderText();
+      buildScene(plainLayers, 'plain');
+      buildScene(resLayers, 'res');
+      const m = calculateMetrics(state.depth);
+
+      if (state.mode === 'forward') {
+        plainInfo.textContent = `${Math.round(m.plainInformation * 100)}%`;
+        resInfo.textContent = `${Math.round(m.resInformation * 100)}%`;
+        plainGrad.textContent = m.plainGradient.toFixed(3);
+        resGrad.textContent = m.resGradient.toFixed(2);
+      } else if (state.mode === 'backward') {
+        plainInfo.textContent = `${Math.round((m.plainInformation - 0.08) * 100)}%`;
+        resInfo.textContent = `${Math.round((m.resInformation - 0.02) * 100)}%`;
+        plainGrad.textContent = m.plainGradient.toFixed(4);
+        resGrad.textContent = m.resGradient.toFixed(2);
+      } else {
+        plainInfo.textContent = `${Math.round((m.plainInformation - 0.05) * 100)}%`;
+        resInfo.textContent = `${Math.round(m.resInformation * 100)}%`;
+        plainGrad.textContent = m.plainGradient.toFixed(4);
+        resGrad.textContent = m.resGradient.toFixed(2);
+      }
+
+      if (replay) {
+        const scenes = document.querySelectorAll('.flow, .skip');
+        scenes.forEach(el => {
+          el.style.animation = 'none';
+          void el.offsetWidth;
+          el.style.animation = '';
+        });
+      }
+    }
+
+    window.addEventListener('resize', () => renderScenes());
+    setSpeed(1);
+    renderScenes();
+  </script>
+</body>
+</html>

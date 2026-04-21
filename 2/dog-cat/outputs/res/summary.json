@@ -1,0 +1,16 @@
+{
+  "model": "res",
+  "best_val_acc": 0.8522821579731351,
+  "train_counts": [
+    3200,
+    1617
+  ],
+  "val_counts": [
+    800,
+    405
+  ],
+  "test_counts": [
+    1011,
+    1012
+  ]
+}

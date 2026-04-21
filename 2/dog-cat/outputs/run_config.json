@@ -1,0 +1,23 @@
+{
+  "device": "cuda",
+  "class_names": [
+    "cats",
+    "dogs"
+  ],
+  "train_counts": [
+    3200,
+    1617
+  ],
+  "val_counts": [
+    800,
+    405
+  ],
+  "test_counts": [
+    1011,
+    1012
+  ],
+  "models": [
+    "plain",
+    "res"
+  ]
+}
